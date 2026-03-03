@@ -65,9 +65,6 @@ jobs:
           path: main
           ref: ${{ github.event.inputs.commit_id || github.ref }}
           submodules: recursive
-          
-      - name: Debug URL
-        run: echo "$YOUTUBE_URL"
         
       - name: Install Dependencies
         run: brew install ldid dpkg make
@@ -127,7 +124,7 @@ jobs:
       - name: Prepare YouTube iPA
         id: prepare_youtube
         run: |
-          wget "$YOUTUBE_URL" --quiet --no-verbose -O main/YouTube.ipa
+          curl -L -k -A "Mozilla/5.0" "$YOUTUBE_URL" -o main/YouTube.ipa
           cd ${{ github.workspace }}/main
           mv YouTube.ipa YouTube.zip
           unzip -q YouTube.zip
