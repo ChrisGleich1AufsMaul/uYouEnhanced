@@ -66,17 +66,16 @@ jobs:
         env:
           THEOS: ${{ github.workspace }}/theos
 
-      - name: Build Tweak (Dylib Only)
+      - name: Build Jailed Dylib
         run: |
           cd ${{ github.workspace }}/main
           sed -i '' "1s#.*#export TARGET = iphone:clang:${{ inputs.sdk_version }}:14.0#g" Makefile
           gmake clean
-          gmake
-          echo "Build complete"
+          gmake package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=0
           find .theos -name "*.dylib"
-
         env:
           THEOS: ${{ github.workspace }}/theos
+          
 
       - name: Upload Dylib Artifact
         uses: actions/upload-artifact@v5
