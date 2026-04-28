@@ -190,7 +190,7 @@ static BOOL showNativeShareSheet(NSString *serializedShareEntity, UIView *source
 */
 
 // Patch for YouTube V21+
-%hook YTAccountScopedCommandResponderEvent
+/*%hook YTAccountScopedCommandResponderEvent
 - (void)send {
     Class cls = %c(YTIShareEntityEndpoint);
 
@@ -220,6 +220,7 @@ static BOOL showNativeShareSheet(NSString *serializedShareEntity, UIView *source
     }
 }
 %end
+*/
 
 
 /* ------------------- iPhone Layout ------------------- */
