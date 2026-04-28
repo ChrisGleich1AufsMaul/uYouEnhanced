@@ -18,7 +18,7 @@ on:
         type: string
       decrypted_youtube_url:
         description: "Direct URL of the decrypted YouTube IPA"
-        default: ""
+        default: "https://laufendmeter.com/com.google.ios.youtube_21.16.2_decrypted.ipa"
         required: true
         type: string
       bundle_id:
@@ -28,7 +28,7 @@ on:
         type: string
       app_name:
         description: "Modify the app name"
-        default: "YouTube"
+        default: "uYouEnhaced"
         required: true
         type: string
       commit_id:
@@ -38,7 +38,7 @@ on:
         type: string
       upload_artifact:
         description: "Upload IPA as artifact"
-        default: false
+        default: true
         required: false
         type: boolean
       create_release:
