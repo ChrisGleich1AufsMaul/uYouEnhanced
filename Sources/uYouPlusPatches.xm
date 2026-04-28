@@ -173,6 +173,7 @@ static BOOL showNativeShareSheet(NSString *serializedShareEntity, UIView *source
 
 /* -------------------- iPad Layout -------------------- */
 
+/*
 // %group gYouTubeNativeShare // YouTube Native Share Option - 0.2.3 - Supports YouTube v17.33.2-v19.34.2
 %hook YTAccountScopedCommandResponderEvent
 - (void)send {
@@ -184,6 +185,39 @@ static BOOL showNativeShareSheet(NSString *serializedShareEntity, UIView *source
         return %orig;
     if (!showNativeShareSheet(shareEntityEndpoint.serializedShareEntity, self.fromView))
         return %orig;
+}
+%end
+*/
+
+// Patch for YouTube V21+
+%hook YTAccountScopedCommandResponderEvent
+- (void)send {
+    Class cls = %c(YTIShareEntityEndpoint);
+
+    if (!cls || ![cls respondsToSelector:@selector(shareEntityEndpoint)]) {
+        return %orig;
+    }
+
+    GPBExtensionDescriptor *shareEntityEndpointDescriptor =
+        [cls shareEntityEndpoint];
+
+    if (![self.command hasExtension:shareEntityEndpointDescriptor]) {
+        return %orig;
+    }
+
+    YTIShareEntityEndpoint *shareEntityEndpoint =
+        [self.command getExtension:shareEntityEndpointDescriptor];
+
+    if (!shareEntityEndpoint.hasSerializedShareEntity) {
+        return %orig;
+    }
+
+    if (!showNativeShareSheet(
+        shareEntityEndpoint.serializedShareEntity,
+        self.fromView
+    )) {
+        return %orig;
+    }
 }
 %end
 
