@@ -865,6 +865,28 @@ static float uYouSavedPlaybackRate = 0.0f;
 }
 %end
 
+// --- Add 1.75x speed option to varispeed menu ---
+%hook YTVarispeedSwitchController
+- (id)init {
+    self = %orig;
+    NSArray *options = [self valueForKey:@"_options"];
+    NSMutableArray *mutable = [options mutableCopy];
+    BOOL has175 = NO;
+    for (id opt in mutable) {
+        if ([opt rate] == 1.75f) { has175 = YES; break; }
+    }
+    if (!has175) {
+        Class optClass = %c(YTVarispeedSwitchControllerOption);
+        if (optClass) {
+            id newOpt = [[optClass alloc] initWithTitle:@"1.75x" rate:1.75f];
+            [mutable addObject:newOpt];
+            [self setValue:mutable forKey:@"_options"];
+        }
+    }
+    return self;
+}
+%end
+
 %end // gYouSpeedFixes
 
 %group gYouFullscreenFixes
