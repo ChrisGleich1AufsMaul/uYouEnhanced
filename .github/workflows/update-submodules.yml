@@ -9,7 +9,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Git
         run: |
@@ -22,6 +22,8 @@ jobs:
           git add .
           git submodule update --init --recursive --remote Tweaks/DontEatMyContent
           git add .
+          git submodule update --init --recursive --remote Tweaks/FLEXing
+          git add .
           git submodule update --init --recursive --remote Tweaks/iSponsorBlock
           git add .
           git submodule update --init --recursive --remote Tweaks/protobuf
@@ -31,6 +33,8 @@ jobs:
           git submodule update --init --recursive --remote Tweaks/Return-YouTube-Dislikes
           git add .
           git submodule update --init --recursive --remote Tweaks/uYouLocalization
+          git add .
+          git submodule update --init --recursive --remote Tweaks/uYouUnofficial
           git add .
           git submodule update --init --recursive --remote Tweaks/YouGroupSettings
           git add .
@@ -50,7 +54,11 @@ jobs:
           git add .
           git submodule update --init --recursive --remote Tweaks/YouTubeHeader
           git add .
+          git submodule update --init --recursive --remote Tweaks/YouTubeLegacy
+          git add .
           git submodule update --init --recursive --remote Tweaks/YTABConfig
+          git add .
+          git submodule update --init --recursive --remote Tweaks/YTAmbientLight
           git add .
           git submodule update --init --recursive --remote Tweaks/YTClassicVideoQuality
           git add .

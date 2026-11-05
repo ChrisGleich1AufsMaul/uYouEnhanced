@@ -1,9 +1,11 @@
+#import "UYTFileSize.h"
 #import "uYouPlusSettings.h"
 #import "RootOptionsController.h"
 #import "ColourOptionsController.h"
 #import "ColourOptionsController2.h"
 #import "SettingsKeys.h"
 #import "AppIconOptionsController.h"
+#import "UYTLog.h"
 
 #define VERSION_STRING [[NSString stringWithFormat:@"%@", @(OS_STRINGIFY(TWEAK_VERSION))] stringByReplacingOccurrencesOfString:@"\"" withString:@""]
 #define SHOW_RELAUNCH_YT_SNACKBAR [[%c(GOOHUDManagerInternal) sharedInstance] showMessageMainThread:[%c(YTHUDMessage) messageWithText:LOC(@"RESTART_YOUTUBE")]]
@@ -17,7 +19,6 @@
         return YES; \
     }]
 
-// Basic Switch
 #define SWITCH(title, description, key, ...) \
     [sectionItems addObject:[%c(YTSettingsSectionItem) \
         switchItemWithTitle:title \
@@ -32,11 +33,9 @@
         settingItemId:0 \
     ]]
 
-// Switch with Restart popup (SHOW_RELAUNCH_YT_SNACKBAR;)
 #define SWITCH2(title, description, key) \
     SWITCH(title, description, key, SHOW_RELAUNCH_YT_SNACKBAR)
 
-// Switch with customizable code
 #define SWITCH3(title, description, key, code) \
     [sectionItems addObject:[%c(YTSettingsSectionItem) \
         switchItemWithTitle:title \
@@ -48,30 +47,7 @@
         } \
         settingItemId:0]]
 
-/** Example SWITCH3 Usage
-SWITCH3(
-    LOC(@"Your title here"), 
-    LOC(@"Your description here"), 
-    @"yourKey_enabled",
-    // Custom code goes in this block, wrapped in ({...}); Make sure to return YES at the end
-    ({
-        // Show an alert if this setting is being enabled
-        if (enable) {
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Warning" message:@"Some alert message here" preferredStyle:UIAlertControllerStyleAlert];
-            UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil];
-            [alert addAction:okAction];
-            [settingsViewController presentViewController:alert animated:YES completion:nil];
-        }
-        // Update the setting in the storage and reload
-        [[NSUserDefaults standardUserDefaults] setBool:enable forKey:@"yourKey_enabled"];
-        [settingsViewController reloadData];
-        SHOW_RELAUNCH_YT_SNACKBAR;
-        return YES;
-    });
-);
-*/
-
-static NSString *GetCacheSize() { // YTLite - @dayanch96
+static NSString *GetCacheSize() {
     NSString *cachePath = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
     NSArray *filesArray = [[NSFileManager defaultManager] subpathsOfDirectoryAtPath:cachePath error:nil];
 
@@ -79,7 +55,7 @@ static NSString *GetCacheSize() { // YTLite - @dayanch96
     for (NSString *fileName in filesArray) {
         NSString *filePath = [cachePath stringByAppendingPathComponent:fileName];
         NSDictionary *fileAttributes = [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil];
-        folderSize += [fileAttributes fileSize];
+        folderSize += UYTSizeOfAttrs(fileAttributes);
     }
 
     NSByteCountFormatter *formatter = [[NSByteCountFormatter alloc] init];
@@ -88,20 +64,12 @@ static NSString *GetCacheSize() { // YTLite - @dayanch96
     return [formatter stringFromByteCount:folderSize];
 }
 static int contrastMode() {
-    NSString *appVersion = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"];
-    NSComparisonResult result1 = [appVersion compare:@"17.33.2" options:NSNumericSearch];
-    NSComparisonResult result2 = [appVersion compare:@"17.38.10" options:NSNumericSearch];
-
-    if (result1 != NSOrderedAscending && result2 != NSOrderedDescending) {
-        return [[NSUserDefaults standardUserDefaults] integerForKey:@"lcm"];
-    } else {
-        return 0;
-    }
+    return [[NSUserDefaults standardUserDefaults] integerForKey:@"lcm"];
 }
-static int appVersionSpoofer() { // App Version Spoofer
+static int appVersionSpoofer() {
     return [[NSUserDefaults standardUserDefaults] integerForKey:@"versionSpoofer"];
 }
-static int getNotificationIconStyle() { // Notifications Tab
+static int getNotificationIconStyle() {
     return [[NSUserDefaults standardUserDefaults] integerForKey:@"notificationIconStyle"];
 }
 static const NSInteger uYouPlusSection = 500;
@@ -112,7 +80,6 @@ static const NSInteger uYouPlusSection = 500;
 
 extern NSBundle *uYouPlusBundle();
 
-// Settings Search Bar
 %hook YTSettingsViewController
 - (void)loadWithModel:(id)model fromView:(UIView *)view {
     %orig;
@@ -130,7 +97,6 @@ extern NSBundle *uYouPlusBundle();
 }
 %end
 
-// Settings
 %hook YTAppSettingsPresentationData
 + (NSArray *)settingsCategoryOrder {
     NSArray *order = %orig;
@@ -157,10 +123,9 @@ extern NSBundle *uYouPlusBundle();
     YTSettingsViewController *settingsViewController = [self valueForKey:@"_settingsViewControllerDelegate"];
 
     # pragma mark - About
-    // SECTION_HEADER(LOC(@"ABOUT"));
 
     YTSettingsSectionItem *version = [%c(YTSettingsSectionItem)
-        itemWithTitle:LOC(@"uYouEnhanced")
+        itemWithTitle:LOC(@"APP_NAME")
         titleDescription:nil
         accessibilityIdentifier:nil
         detailTextBlock:^NSString *() {
@@ -187,7 +152,7 @@ extern NSBundle *uYouPlusBundle();
 
     YTSettingsSectionItem *developers = [%c(YTSettingsSectionItem)
         itemWithTitle:LOC(@"SUPPORT_THE_DEVELOPERS")
-        titleDescription:LOC(@"MiRO92, PoomSmart, level3tjg, BandarHL, julioverne & Galactic-dev")
+        titleDescription:LOC(@"SUPPORT_THE_DEVELOPERS_DESC")
         accessibilityIdentifier:nil
         detailTextBlock:^NSString *() {
             return nil;
@@ -206,7 +171,6 @@ extern NSBundle *uYouPlusBundle();
         detailTextBlock:nil
         selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
             if (IS_ENABLED(kReplaceCopyandPasteButtons)) {
-                // Export Settings functionality
                 NSURL *tempFileURL = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"uYouEnhancedSettings.txt"]];
                 NSMutableString *settingsString = [NSMutableString string];
                 for (NSString *key in NSUserDefaultsCopyKeys) {
@@ -220,28 +184,22 @@ extern NSBundle *uYouPlusBundle();
                 documentPicker.allowsMultipleSelection = NO;
                 [settingsViewController presentViewController:documentPicker animated:YES completion:nil];
             } else {
-                // Copy Settings functionality (DEFAULT - Copies to Clipboard)
                 NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
                 NSMutableString *settingsString = [NSMutableString string];
                 for (NSString *key in NSUserDefaultsCopyKeys) {
                     id value = [userDefaults objectForKey:key];
                     id defaultValue = NSUserDefaultsCopyKeysDefaults[key];
 
-                    // Only include the setting if it is different from the default value
-                    // If no default value is found, include it by default
                     if (value && (!defaultValue || ![value isEqual:defaultValue])) {
                         [settingsString appendFormat:@"%@: %@\n", key, value];
                     }
-                }       
+                }
                 [[UIPasteboard generalPasteboard] setString:settingsString];
-                // Show a confirmation message or perform some other action here
                 [[%c(GOOHUDManagerInternal) sharedInstance] showMessageMainThread:[%c(YTHUDMessage) messageWithText:@"Settings copied"]];
             }
-            // Prompt to export uYouEnhanced settings - @bhackel
             UIAlertController *exportAlert = [UIAlertController alertControllerWithTitle:@"Export Settings" message:@"Note: This feature cannot save iSponsorBlock and most YouTube settings.\n\nWould you like to also export your uYouEnhanced Settings?" preferredStyle:UIAlertControllerStyleAlert];
             [exportAlert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
             [exportAlert addAction:[UIAlertAction actionWithTitle:@"Export" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-                // Export uYouEnhanced Settings functionality - @bhackhel
                 [%c(YTLUserDefaults) exportYtlSettings];
             }]];
             [settingsViewController presentViewController:exportAlert animated:YES completion:nil];
@@ -257,17 +215,15 @@ extern NSBundle *uYouPlusBundle();
         detailTextBlock:nil
         selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
             if (IS_ENABLED(@"replaceCopyandPasteButtons_enabled")) {
-                // Import Settings functionality
                 UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.text"] inMode:UIDocumentPickerModeImport];
                 documentPicker.allowsMultipleSelection = NO;
                 documentPicker.delegate = self;
                 [settingsViewController presentViewController:documentPicker animated:YES completion:nil];
                 return YES;
             } else {
-                // Paste Settings functionality (default behavior)
-                UIAlertController *confirmPasteAlert = [UIAlertController alertControllerWithTitle:LOC(@"Are you sure you want to paste the settings?") message:nil preferredStyle:UIAlertControllerStyleAlert];
-                [confirmPasteAlert addAction:[UIAlertAction actionWithTitle:LOC(@"Cancel") style:UIAlertActionStyleCancel handler:nil]];
-                [confirmPasteAlert addAction:[UIAlertAction actionWithTitle:LOC(@"Confirm") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                UIAlertController *confirmPasteAlert = [UIAlertController alertControllerWithTitle:LOC(@"MSG_CONFIRM_PASTE_SETTINGS") message:nil preferredStyle:UIAlertControllerStyleAlert];
+                [confirmPasteAlert addAction:[UIAlertAction actionWithTitle:LOC(@"MSG_CANCEL") style:UIAlertActionStyleCancel handler:nil]];
+                [confirmPasteAlert addAction:[UIAlertAction actionWithTitle:LOC(@"MSG_CONFIRM") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
                     NSString *settingsString = [[UIPasteboard generalPasteboard] string];
                     if (settingsString.length > 0) {
                         NSArray *lines = [settingsString componentsSeparatedByString:@"\n"];
@@ -278,7 +234,7 @@ extern NSBundle *uYouPlusBundle();
                                 NSString *value = components[1];
                                 [[NSUserDefaults standardUserDefaults] setObject:value forKey:key];
                             }
-                        }                 
+                        }
                         [settingsViewController reloadData];
                         [[%c(GOOHUDManagerInternal) sharedInstance] showMessageMainThread:[%c(YTHUDMessage) messageWithText:@"Settings applied"]];
                         SHOW_RELAUNCH_YT_SNACKBAR;
@@ -286,9 +242,8 @@ extern NSBundle *uYouPlusBundle();
                 }]];
                 [settingsViewController presentViewController:confirmPasteAlert animated:YES completion:nil];
             }
-            // Reminder to import uYouEnhanced settings - @bhackel
-            UIAlertController *reminderAlert = [UIAlertController alertControllerWithTitle:@"Reminder" 
-                                                                                message:@"Remember to import your uYouEnhanced settings as well." 
+            UIAlertController *reminderAlert = [UIAlertController alertControllerWithTitle:@"Reminder"
+                                                                                message:@"Remember to import your uYouEnhanced settings as well."
                                                                             preferredStyle:UIAlertControllerStyleAlert];
             [reminderAlert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
             [settingsViewController presentViewController:reminderAlert animated:YES completion:nil];
@@ -299,13 +254,29 @@ extern NSBundle *uYouPlusBundle();
 
     SWITCH(LOC(@"REPLACE_COPY_AND_PASTE_BUTTONS"), LOC(@"REPLACE_COPY_AND_PASTE_BUTTONS_DESC"), kReplaceCopyandPasteButtons);
 
+    YTSettingsSectionItem *debugLogs = [%c(YTSettingsSectionItem)
+        itemWithTitle:@"uYouEnhanced Debug Logs"
+        titleDescription:[NSString stringWithFormat:@"Pipeline errors tracked: %lu — tap to export the log file", (unsigned long)UYTDebugErrorCount()]
+        accessibilityIdentifier:nil
+        detailTextBlock:nil
+        selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
+            NSURL *logFileURL = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"uYouEnhancedDebugReport.txt"]];
+            UYTDebugInfo(@"[uYouEnhanced] exporting debug report (%lu line(s), %lu error(s))", (unsigned long)UYTDebugLineCount(), (unsigned long)UYTDebugErrorCount());
+            [UYTDebugFullReport() writeToURL:logFileURL atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            UIDocumentPickerViewController *logPicker = [[UIDocumentPickerViewController alloc] initWithURL:logFileURL inMode:UIDocumentPickerModeExportToService];
+            logPicker.allowsMultipleSelection = NO;
+            [settingsViewController presentViewController:logPicker animated:YES completion:nil];
+            return YES;
+        }
+    ];
+    [sectionItems addObject:debugLogs];
+
     YTSettingsSectionItem *exitYT = [%c(YTSettingsSectionItem)
         itemWithTitle:LOC(@"QUIT_YOUTUBE")
         titleDescription:nil
         accessibilityIdentifier:nil
         detailTextBlock:nil
         selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
-            // https://stackoverflow.com/a/17802404/19227228
             [[UIApplication sharedApplication] performSelector:@selector(suspend)];
             [NSThread sleepForTimeInterval:0.5];
             exit(0);
@@ -313,11 +284,11 @@ extern NSBundle *uYouPlusBundle();
     ];
     [sectionItems addObject:exitYT];
 
-    SECTION_HEADER(LOC(@"📺 App Personalization"));
+    SECTION_HEADER(LOC(@"APP_PERSONALIZATION"));
     # pragma mark - uYouEnhanced Essential Menu
     YTSettingsSectionItem *customAppMenu = [%c(YTSettingsSectionItem)
         itemWithTitle:LOC(@"UYOUENHANCED_ESSENTIAL_MENU")
-        titleDescription:LOC(@"This menu includes App Color Customization 🎨 & Ability to Clear the Cache 🗑️")
+        titleDescription:LOC(@"UYOUENHANCED_ESSENTIAL_MENU_DESC")
         accessibilityIdentifier:nil
         detailTextBlock:nil
         selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
@@ -352,7 +323,7 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
                 NSString *cachePath = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
                 [[NSFileManager defaultManager] removeItemAtPath:cachePath error:nil];
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    [[%c(YTToastResponderEvent) eventWithMessage:LOC(@"Done") firstResponder:[self parentResponder]] send];
+                    [[%c(YTToastResponderEvent) eventWithMessage:LOC(@"MSG_DONE") firstResponder:[self parentResponder]] send];
                 });
             });
             return YES;
@@ -411,7 +382,7 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
                 ],
                 [YTSettingsSectionItemClass
                     checkmarkItemWithTitle:LOC(@"CUSTOM_DARK_THEME")
-                    titleDescription:LOC(@"In order to use Custom Themes, go to uYouEnhanced Essential Menu, you will need to press Custom Theme Color and than change the colors.")
+                    titleDescription:LOC(@"CUSTOM_DARK_THEME_DESC")
                     selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
                         [[NSUserDefaults standardUserDefaults] setInteger:3 forKey:kAppTheme];
                         [settingsViewController reloadData];
@@ -484,13 +455,12 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
     SWITCH2(LOC(@"HIDE_FULLSCREEN_ACTION_BUTTONS"), LOC(@"HIDE_FULLSCREEN_ACTION_BUTTONS_DESC"), kHideFullscreenActions);
     SWITCH2(LOC(@"HIDE_SUGGESTED_VIDEO"), LOC(@"HIDE_SUGGESTED_VIDEO_DESC"), kHideSuggestedVideo);
     SWITCH2(LOC(@"HIDE_HEATWAVES_BAR"), LOC(@"HIDE_HEATWAVES_BAR_DESC"), kHideHeatwaves);
-    SWITCH2(LOC(@"HIDE_DOUBLE_TAP_TO_SEEK_OVERLAY"), LOC(@"HIDE_DOUBLE_TAP_TO_SEEK_OVERLAY_DESC"), kHideDoubleTapToSeekOverlay);
     SWITCH2(LOC(@"HIDE_DARK_OVERLAY_BACKGROUND"), LOC(@"HIDE_DARK_OVERLAY_BACKGROUND_DESC"), kHideOverlayDarkBackground);
     SWITCH2(LOC(@"HIDE_AMBIENT_MODE_IN_FULLSCREEN"), LOC(@"HIDE_AMBIENT_MODE_IN_FULLSCREEN_DESC"), kDisableAmbientMode);
     SWITCH2(LOC(@"HIDE_SUGGESTED_VIDEOS_IN_FULLSCREEN"), LOC(@"HIDE_SUGGESTED_VIDEOS_IN_FULLSCREEN_DESC"), kHideVideosInFullscreen);
     SWITCH3(
-        LOC(@"HIDE_ALL_VIDEOS_UNDER_PLAYER"), 
-        LOC(@"HIDE_ALL_VIDEOS_UNDER_PLAYER_DESC"), 
+        LOC(@"HIDE_ALL_VIDEOS_UNDER_PLAYER"),
+        LOC(@"HIDE_ALL_VIDEOS_UNDER_PLAYER_DESC"),
         kHideRelatedWatchNexts,
         ({
             if (enable) {
@@ -517,16 +487,17 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
 
     SWITCH(LOC(@"HIDE_SUPER_THANKS"), LOC(@"HIDE_SUPER_THANKS_DESC"), kHideBuySuperThanks);
     SWITCH(LOC(@"HIDE_SUBCRIPTIONS"), LOC(@"HIDE_SUBCRIPTIONS_DESC"), kHideSubscriptions);
-    // SWITCH(LOC(@"DISABLE_RESUME_TO_SHORTS"), LOC(@"DISABLE_RESUME_TO_SHORTS_DESC"), kDisableResumeToShorts);
+    SWITCH(LOC(@"DISABLE_RESUME_TO_SHORTS"), LOC(@"DISABLE_RESUME_TO_SHORTS_DESC"), kDisableResumeToShorts);
     SWITCH2(LOC(@"SHORTS_QUALITY_PICKER"), LOC(@"SHORTS_QUALITY_PICKER_DESC"), kShortsQualityPicker);
+    SWITCH2(LOC(@"SHORTS_PROGRESS_BAR"), LOC(@"SHORTS_PROGRESS_BAR_DESC"), kShortsProgressBar);
+    SWITCH(LOC(@"HIDE_SHORTS_CLIP_BUTTON"), LOC(@"HIDE_SHORTS_CLIP_BUTTON_DESC"), kHideShortsClipButton);
+    SWITCH(LOC(@"HIDE_SHORTS_DOWNLOAD_BUTTON"), LOC(@"HIDE_SHORTS_DOWNLOAD_BUTTON_DESC"), kHideShortsDownloadButton);
+    SWITCH(LOC(@"HIDE_SHORTS_REMIX_BUTTON"), LOC(@"HIDE_SHORTS_REMIX_BUTTON_DESC"), kHideShortsRemixButton);
+    SWITCH(LOC(@"HIDE_SHORTS_STATS_BUTTON"), LOC(@"HIDE_SHORTS_STATS_BUTTON_DESC"), kHideShortsStatsButton);
 
     # pragma mark - Video player button options
     SECTION_HEADER(LOC(@"VIDEO_PLAYER_BUTTON_OPTIONS"));
 
-// (the options "Red Subscribe Button" and "Hide Button Containers under player" are currently not working, would most likely result in effecting the whole entire app.)
-//
-//  SWITCH(LOC(@"RED_SUBSCRIBE_BUTTON"), LOC(@"RED_SUBSCRIBE_BUTTON_DESC"), kRedSubscribeButton);
-//  SWITCH2(LOC(@"HIDE_BUTTON_CONTAINERS_UNDER_PLAYER"), LOC(@"HIDE_BUTTON_CONTAINERS_UNDER_PLAYER_DESC"), kHideButtonContainers);
     SWITCH(LOC(@"HIDE_CONNECT_BUTTON"), LOC(@"HIDE_CONNECT_BUTTON_DESC"), kHideConnectButton);
     SWITCH(LOC(@"HIDE_SHARE_BUTTON"), LOC(@"HIDE_SHARE_BUTTON_DESC"), kHideShareButton);
     SWITCH(LOC(@"HIDE_REMIX_BUTTON"), LOC(@"HIDE_REMIX_BUTTON_DESC"), kHideRemixButton);
@@ -539,12 +510,9 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
     SWITCH(LOC(@"HIDE_COMMENT_SECTION_BUTTON"), LOC(@"HIDE_COMMENT_SECTION_BUTTON_DESC"), kHideCommentSection);
 
 # pragma mark - App settings overlay options
-    SECTION_HEADER(LOC(@"App Settings Overlay Options"));
+    SECTION_HEADER(LOC(@"APP_SETTINGS_OVERLAY_OPTIONS"));
 
     SWITCH2(LOC(@"HIDE_ACCOUNT_SECTION"), LOC(@"RESTART_REQUIRED"), kDisableAccountSection);
-//  SWITCH2(LOC(@"Hide `DontEatMyContent` Section"), LOC(@"RESTART_REQUIRED"), kDisableDontEatMyContentSection);
-//  SWITCH2(LOC(@"Hide `YouTube Return Dislike` Section"), LOC(@"RESTART_REQUIRED"), kDisableReturnYouTubeDislikeSection);
-//  SWITCH2(LOC(@"Hide `YouPiP` Section"), LOC(@"RESTART_REQUIRED"), kDisableYouPiPSection);
     SWITCH2(LOC(@"HIDE_AUTOPLAY_SECTION"), LOC(@"RESTART_REQUIRED"), kDisableAutoplaySection);
     SWITCH2(LOC(@"HIDE_TRY_NEW_FEATURES_SECTION"), LOC(@"RESTART_REQUIRED"), kDisableTryNewFeaturesSection);
     SWITCH2(LOC(@"HIDE_VIDEO_QUALITY_PREFERENCES_SECTION"), LOC(@"RESTART_REQUIRED"), kDisableVideoQualityPreferencesSection);
@@ -635,10 +603,8 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
         }
         selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
             if (contrastMode() == 0) {
-                // Get the current version (including spoofed versions)
                 Class YTVersionUtilsClass = %c(YTVersionUtils);
                 NSString *appVersion = [YTVersionUtilsClass performSelector:@selector(appVersion)];
-                // Alert the user that they need to enable the fix
                 UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Incompatible YouTube Version" message:[NSString stringWithFormat:@"LowContrastMode is only available for app versions v19.01.1-v20.33.2. You are using v%@. Enable anyway?", appVersion] preferredStyle:UIAlertControllerStyleAlert];
                 UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil];
                 [alert addAction:okAction];
@@ -646,18 +612,18 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
                 return NO;
             } else {
                 NSArray <YTSettingsSectionItem *> *rows = @[
-                    [YTSettingsSectionItemClass checkmarkItemWithTitle:LOC(@"Default") titleDescription:nil selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
+                    [YTSettingsSectionItemClass checkmarkItemWithTitle:LOC(@"DEFAULT") titleDescription:nil selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
                         [[NSUserDefaults standardUserDefaults] setInteger:0 forKey:@"lcm"];
                         [settingsViewController reloadData];
                         return YES;
                     }],
-                    [YTSettingsSectionItemClass checkmarkItemWithTitle:LOC(@"Custom Color") titleDescription:nil selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
+                    [YTSettingsSectionItemClass checkmarkItemWithTitle:LOC(@"CUSTOM_COLOR") titleDescription:nil selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
                         [[NSUserDefaults standardUserDefaults] setInteger:1 forKey:@"lcm"];
                         [settingsViewController reloadData];
                         return YES;
                     }]
                 ];
-                YTSettingsPickerViewController *picker = [[%c(YTSettingsPickerViewController) alloc] initWithNavTitle:LOC(@"Low Contrast Mode Selector") pickerSectionTitle:nil rows:rows selectedItemIndex:contrastMode() parentResponder:[self parentResponder]];
+                YTSettingsPickerViewController *picker = [[%c(YTSettingsPickerViewController) alloc] initWithNavTitle:LOC(@"LOW_CONTRAST_MODE_SELECTOR") pickerSectionTitle:nil rows:rows selectedItemIndex:contrastMode() parentResponder:[self parentResponder]];
                 [settingsViewController pushViewController:picker];
                 return YES;
             }
@@ -665,291 +631,219 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
     ];
     [sectionItems addObject:lowContrastModeButton];
     SWITCH2(LOC(@"CLASSIC_VIDEO_PLAYER"), LOC(@"CLASSIC_VIDEO_PLAYER_DESC"), kClassicVideoPlayer);
-    SWITCH2(LOC(@"DISABLE_ROUNDED_CORNERS_ON_HINTS"), LOC(@"DISABLE_ROUNDED_CORNERS_ON_HINTS_DESC"), kDisableRoundedHints);
-    SWITCH3(
-        LOC(@"YTNOMODERNUI"), 
-        LOC(@"YTNOMODERNUI_DESC"), 
-        kYTNoModernUI,
-        ({
-            if (enable) {
-                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Warning" message:@"This will force-enable other settings on restart. To disable them, you must turn this setting off. (YTNoModernUI is Deprecated)" preferredStyle:UIAlertControllerStyleAlert];
-                UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil];
-                [alert addAction:okAction];
-                [settingsViewController presentViewController:alert animated:YES completion:nil];
-            }
-            [[NSUserDefaults standardUserDefaults] setBool:enable forKey:kYTNoModernUI];
-            [settingsViewController reloadData];
-            SHOW_RELAUNCH_YT_SNACKBAR;
-            return YES;
-        });
-    );
     SWITCH2(LOC(@"ENABLE_APP_VERSION_SPOOFER"), LOC(@"ENABLE_APP_VERSION_SPOOFER_DESC"), kEnableVersionSpoofer);
     YTSettingsSectionItem *versionSpoofer = [%c(YTSettingsSectionItem)
         itemWithTitle:LOC(@"VERSION_SPOOFER_SELECTOR")
         accessibilityIdentifier:nil
         detailTextBlock:^NSString *() {
             switch (appVersionSpoofer()) {
-                case 0: return @"v21.08.3";
-                case 1: return @"v21.07.4";
-                case 2: return @"v21.06.2";
-                case 3: return @"v21.05.3";
-                case 4: return @"v21.04.2";
-                case 5: return @"v21.03.2";
-                case 6: return @"v21.02.3";
-                case 7: return @"v20.50.10";
-                case 8: return @"v20.50.9";
-                case 9: return @"v20.50.6";
-                case 10: return @"v20.49.5";
-                case 11: return @"v20.47.3";
-                case 12: return @"v20.46.3";
-                case 13: return @"v20.46.2";
-                case 14: return @"v20.45.3";
-                case 15: return @"v20.44.2";
-                case 16: return @"v20.43.3";
-                case 17: return @"v20.42.3";
-                case 18: return @"v20.41.5";
-                case 19: return @"v20.41.4";
-                case 20: return @"v20.40.4";
-                case 21: return @"v20.39.6";
-                case 22: return @"v20.39.5";
-                case 23: return @"v20.39.4";
-                case 24: return @"v20.38.4";
-                case 25: return @"v20.38.3";
-                case 26: return @"v20.37.5";
-                case 27: return @"v20.37.3";
-                case 28: return @"v20.36.3";
-                case 29: return @"v20.35.2";
-                case 30: return @"v20.34.2";
-                case 31: return @"v20.33.2";
-                case 32: return @"v20.32.5";
-                case 33: return @"v20.32.4";
-                case 34: return @"v20.31.6";
-                case 35: return @"v20.31.5";
-                case 36: return @"v20.30.5";
-                case 37: return @"v20.29.3";
-                case 38: return @"v20.28.2";
-                case 39: return @"v20.26.7";
-                case 40: return @"v20.25.4";
-                case 41: return @"v20.24.5";
-                case 42: return @"v20.24.4";
-                case 43: return @"v20.23.3";
-                case 44: return @"v20.22.1";
-                case 45: return @"v20.21.6";
-                case 46: return @"v20.20.7";
-                case 47: return @"v20.20.5";
-                case 48: return @"v20.19.3";
-                case 49: return @"v20.19.2";
-                case 50: return @"v20.18.5";
-                case 51: return @"v20.18.4";
-                case 52: return @"v20.16.7";
-                case 53: return @"v20.15.1";
-                case 54: return @"v20.14.2";
-                case 55: return @"v20.13.5";
-                case 56: return @"v20.12.4";
-                case 57: return @"v20.11.6";
-                case 58: return @"v20.10.4";
-                case 59: return @"v20.10.3";
-                case 60: return @"v20.09.3";
-                case 61: return @"v20.08.3";
-                case 62: return @"v20.07.6";
-                case 63: return @"v20.06.03";
-                case 64: return @"v20.05.4";
-                case 65: return @"v20.03.1";
-                case 66: return @"v20.03.02";
-                case 67: return @"v20.02.3";
-                case 68: return @"v19.49.7";
-                case 69: return @"v19.49.5";
-                case 70: return @"v19.49.3";
-                case 71: return @"v19.47.7";
-                case 72: return @"v19.46.3";
-                case 73: return @"v19.45.4";
-                case 74: return @"v19.44.4";
-                case 75: return @"v19.43.2";
-                case 76: return @"v19.42.1";
-                case 77: return @"v19.41.3";
-                case 78: return @"v19.40.4";
-                case 79: return @"v19.39.1";
-                case 80: return @"v19.38.2";
-                case 81: return @"v19.37.2";
-                case 82: return @"v19.36.1";
-                case 83: return @"v19.35.3";
-                case 84: return @"v19.34.2";
-                case 85: return @"v19.33.2";
-                case 86: return @"v19.32.8";
-                case 87: return @"v19.32.6";
-                case 88: return @"v19.31.4";
-                case 89: return @"v19.30.2";
-                case 90: return @"v19.29.1";
-                case 91: return @"v19.28.1";
-                case 92: return @"v19.26.5";
-                case 93: return @"v19.25.4";
-                case 94: return @"v19.25.3";
-                case 95: return @"v19.24.3";
-                case 96: return @"v19.24.2";
-                case 97: return @"v19.23.3";
-                case 98: return @"v19.22.6";
-                case 99: return @"v19.22.3";
-                case 100: return @"v19.21.3";
-                case 101: return @"v19.21.2";
-                case 102: return @"v19.20.2 (Deprecated)";
-                case 103: return @"v19.19.7 (Deprecated)";
-                case 104: return @"v19.19.5 (Deprecated)";
-                case 105: return @"v19.18.2 (Deprecated)";
-                case 106: return @"v19.17.2 (Deprecated)";
-                case 107: return @"v19.16.3 (Deprecated)";
-                case 108: return @"v19.15.1 (Deprecated)";
-                case 109: return @"v19.14.3 (Deprecated)";
-                case 110: return @"v19.14.2 (Deprecated)";
-                case 111: return @"v19.13.1 (Deprecated)";
-                case 112: return @"v19.12.3 (Deprecated)";
-                case 113: return @"v19.10.7 (Deprecated)";
-                case 114: return @"v19.10.6 (Deprecated)";
-                case 115: return @"v19.10.5 (Deprecated)";
-                case 116: return @"v19.09.4 (Deprecated)";
-                case 117: return @"v19.09.3 (Deprecated)";
-                case 118: return @"v19.08.2 (Deprecated)";
-                case 119: return @"v19.07.5 (Deprecated)";
-                case 120: return @"v19.07.4 (Deprecated)";
-                case 121: return @"v19.06.2 (Deprecated)";
-                case 122: return @"v19.05.5 (Deprecated)";
-                case 123: return @"v19.05.3 (Deprecated)";
-                case 124: return @"v19.04.3 (Deprecated)";
-                case 125: return @"v19.03.2 (Deprecated)";
-                case 126: return @"v19.02.1 (Deprecated)";
-                case 127: return @"v19.01.1 (Deprecated)";
-                default: return @"v21.08.3";
+                case 0: return @"v21.39.4";
+                case 1: return @"v21.38.2";
+                case 2: return @"v21.37.5";
+                case 3: return @"v21.37.4";
+                case 4: return @"v21.36.6";
+                case 5: return @"v21.35.3";
+                case 6: return @"v21.34.3";
+                case 7: return @"v21.33.6";
+                case 8: return @"v21.33.5";
+                case 9: return @"v21.32.4";
+                case 10: return @"v21.31.3";
+                case 11: return @"v21.30.5";
+                case 12: return @"v21.29.3";
+                case 13: return @"v21.28.3";
+                case 14: return @"v21.26.4";
+                case 15: return @"v21.25.5";
+                case 16: return @"v21.24.3";
+                case 17: return @"v21.22.4";
+                case 18: return @"v21.21.3";
+                case 19: return @"v21.20.4";
+                case 20: return @"v21.19.2";
+                case 21: return @"v21.18.4";
+                case 22: return @"v21.17.3";
+                case 23: return @"v21.16.2";
+                case 24: return @"v21.15.5";
+                case 25: return @"v21.15.4";
+                case 26: return @"v21.14.4";
+                case 27: return @"v21.13.6";
+                case 28: return @"v21.12.4";
+                case 29: return @"v21.11.4";
+                case 30: return @"v21.10.2";
+                case 31: return @"v21.09.3";
+                case 32: return @"v21.09.2";
+                case 33: return @"v21.08.3";
+                case 34: return @"v21.07.4";
+                case 35: return @"v21.06.2";
+                case 36: return @"v21.05.3";
+                case 37: return @"v21.04.2";
+                case 38: return @"v21.03.2";
+                case 39: return @"v21.02.3";
+                case 40: return @"v20.50.10";
+                case 41: return @"v20.50.9";
+                case 42: return @"v20.50.6";
+                case 43: return @"v20.49.5";
+                case 44: return @"v20.47.3";
+                case 45: return @"v20.46.3";
+                case 46: return @"v20.46.2";
+                case 47: return @"v20.45.3";
+                case 48: return @"v20.44.2";
+                case 49: return @"v20.43.3";
+                case 50: return @"v20.42.3";
+                case 51: return @"v20.41.5";
+                case 52: return @"v20.41.4";
+                case 53: return @"v20.40.4";
+                case 54: return @"v20.39.6";
+                case 55: return @"v20.39.5";
+                case 56: return @"v20.39.4";
+                case 57: return @"v20.38.4";
+                case 58: return @"v20.38.3";
+                case 59: return @"v20.37.5";
+                case 60: return @"v20.37.3";
+                case 61: return @"v20.36.3";
+                case 62: return @"v20.35.2";
+                case 63: return @"v20.34.2";
+                case 64: return @"v20.33.2";
+                case 65: return @"v20.32.5";
+                case 66: return @"v20.32.4";
+                case 67: return @"v20.31.6";
+                case 68: return @"v20.31.5";
+                case 69: return @"v20.30.5";
+                case 70: return @"v20.29.3";
+                case 71: return @"v20.28.2";
+                case 72: return @"v20.26.7";
+                case 73: return @"v20.25.4";
+                case 74: return @"v20.24.5";
+                case 75: return @"v20.24.4";
+                case 76: return @"v20.23.3 (Deprecated)";
+                case 77: return @"v20.22.1 (Deprecated)";
+                case 78: return @"v20.21.6 (Deprecated)";
+                case 79: return @"v20.20.7 (Deprecated)";
+                case 80: return @"v20.20.5 (Deprecated)";
+                case 81: return @"v20.19.3 (Deprecated)";
+                case 82: return @"v20.19.2 (Deprecated)";
+                case 83: return @"v20.18.5 (Deprecated)";
+                case 84: return @"v20.18.4 (Deprecated)";
+                case 85: return @"v20.16.7 (Deprecated)";
+                case 86: return @"v20.15.1 (Deprecated)";
+                case 87: return @"v20.14.2 (Deprecated)";
+                case 88: return @"v20.13.5 (Deprecated)";
+                case 89: return @"v20.12.4 (Deprecated)";
+                case 90: return @"v20.11.6 (Deprecated)";
+                case 91: return @"v20.10.4 (Deprecated)";
+                case 92: return @"v20.10.3 (Deprecated)";
+                case 93: return @"v20.09.3 (Deprecated)";
+                case 94: return @"v20.08.3 (Deprecated)";
+                case 95: return @"v20.07.6 (Deprecated)";
+                case 96: return @"v20.06.03 (Deprecated)";
+                case 97: return @"v20.05.4 (Deprecated)";
+                case 98: return @"v20.03.1 (Deprecated)";
+                case 99: return @"v20.03.02 (Deprecated)";
+                case 100: return @"v20.02.3 (Deprecated)";
+                default: return @"v21.39.4";
             }
         }
         selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
             NSArray <YTSettingsSectionItem *> *rows = @[
-                SPOOFER_VERSION(@"v21.08.3", 0),
-                SPOOFER_VERSION(@"v21.07.4", 1),
-                SPOOFER_VERSION(@"v21.06.2", 2),
-                SPOOFER_VERSION(@"v21.05.3", 3),
-                SPOOFER_VERSION(@"v21.04.2", 4),
-                SPOOFER_VERSION(@"v21.03.2", 5),
-                SPOOFER_VERSION(@"v21.02.3", 6),
-                SPOOFER_VERSION(@"v20.50.10", 7),
-                SPOOFER_VERSION(@"v20.50.9", 8),
-                SPOOFER_VERSION(@"v20.50.6", 9),
-                SPOOFER_VERSION(@"v20.49.5", 10),
-                SPOOFER_VERSION(@"v20.47.3", 11),
-                SPOOFER_VERSION(@"v20.46.3", 12),
-                SPOOFER_VERSION(@"v20.46.2", 13),
-                SPOOFER_VERSION(@"v20.45.3", 14),
-                SPOOFER_VERSION(@"v20.44.2", 15),
-                SPOOFER_VERSION(@"v20.43.3", 16),
-                SPOOFER_VERSION(@"v20.42.3", 17),
-                SPOOFER_VERSION(@"v20.41.5", 18),
-                SPOOFER_VERSION(@"v20.41.4", 19),
-                SPOOFER_VERSION(@"v20.40.4", 20),
-                SPOOFER_VERSION(@"v20.39.6", 21),
-                SPOOFER_VERSION(@"v20.39.5", 22),
-                SPOOFER_VERSION(@"v20.39.4", 23),
-                SPOOFER_VERSION(@"v20.38.4", 24),
-                SPOOFER_VERSION(@"v20.38.3", 25),
-                SPOOFER_VERSION(@"v20.37.5", 26),
-                SPOOFER_VERSION(@"v20.37.3", 27),
-                SPOOFER_VERSION(@"v20.36.3", 28),
-                SPOOFER_VERSION(@"v20.35.2", 29),
-                SPOOFER_VERSION(@"v20.34.2", 30),
-                SPOOFER_VERSION(@"v20.33.2", 31),
-                SPOOFER_VERSION(@"v20.32.5", 32),
-                SPOOFER_VERSION(@"v20.32.4", 33),
-                SPOOFER_VERSION(@"v20.31.6", 34),
-                SPOOFER_VERSION(@"v20.31.5", 35),
-                SPOOFER_VERSION(@"v20.30.5", 36),
-                SPOOFER_VERSION(@"v20.29.3", 37),
-                SPOOFER_VERSION(@"v20.28.2", 38),
-                SPOOFER_VERSION(@"v20.26.7", 39),
-                SPOOFER_VERSION(@"v20.25.4", 40),
-                SPOOFER_VERSION(@"v20.24.5", 41),
-                SPOOFER_VERSION(@"v20.24.4", 42),
-                SPOOFER_VERSION(@"v20.23.3", 43),
-                SPOOFER_VERSION(@"v20.22.1", 44),
-                SPOOFER_VERSION(@"v20.21.6", 45),
-                SPOOFER_VERSION(@"v20.20.7", 46),
-                SPOOFER_VERSION(@"v20.20.5", 47),
-                SPOOFER_VERSION(@"v20.19.3", 48),
-                SPOOFER_VERSION(@"v20.19.2", 49),
-                SPOOFER_VERSION(@"v20.18.5", 50),
-                SPOOFER_VERSION(@"v20.18.4", 51),
-                SPOOFER_VERSION(@"v20.16.7", 52),
-                SPOOFER_VERSION(@"v20.15.1", 53),
-                SPOOFER_VERSION(@"v20.14.2", 54),
-                SPOOFER_VERSION(@"v20.13.5", 55),
-                SPOOFER_VERSION(@"v20.12.4", 56),
-                SPOOFER_VERSION(@"v20.11.6", 57),
-                SPOOFER_VERSION(@"v20.10.4", 58),
-                SPOOFER_VERSION(@"v20.10.3", 59),
-                SPOOFER_VERSION(@"v20.09.3", 60),
-                SPOOFER_VERSION(@"v20.08.3", 61),
-                SPOOFER_VERSION(@"v20.07.6", 62),
-                SPOOFER_VERSION(@"v20.06.03", 63),
-                SPOOFER_VERSION(@"v20.05.4", 64),
-                SPOOFER_VERSION(@"v20.03.1", 65),
-                SPOOFER_VERSION(@"v20.03.02", 66),
-                SPOOFER_VERSION(@"v20.02.3", 67),
-                SPOOFER_VERSION(@"v19.49.7", 68),
-                SPOOFER_VERSION(@"v19.49.5", 69),
-                SPOOFER_VERSION(@"v19.49.3", 70),
-                SPOOFER_VERSION(@"v19.47.7", 71),
-                SPOOFER_VERSION(@"v19.46.3", 72),
-                SPOOFER_VERSION(@"v19.45.4", 73),
-                SPOOFER_VERSION(@"v19.44.4", 74),
-                SPOOFER_VERSION(@"v19.43.2", 75),
-                SPOOFER_VERSION(@"v19.42.1", 76),
-                SPOOFER_VERSION(@"v19.41.3", 77),
-                SPOOFER_VERSION(@"v19.40.4", 78),
-                SPOOFER_VERSION(@"v19.39.1", 79),
-                SPOOFER_VERSION(@"v19.38.2", 80),
-                SPOOFER_VERSION(@"v19.37.2", 81),
-                SPOOFER_VERSION(@"v19.36.1", 82),
-                SPOOFER_VERSION(@"v19.35.3", 83),
-                SPOOFER_VERSION(@"v19.34.2", 84),
-                SPOOFER_VERSION(@"v19.33.2", 85),
-                SPOOFER_VERSION(@"v19.32.8", 86),
-                SPOOFER_VERSION(@"v19.32.6", 87),
-                SPOOFER_VERSION(@"v19.31.4", 88),
-                SPOOFER_VERSION(@"v19.30.2", 89),
-                SPOOFER_VERSION(@"v19.29.1", 90),
-                SPOOFER_VERSION(@"v19.28.1", 91),
-                SPOOFER_VERSION(@"v19.26.5", 92),
-                SPOOFER_VERSION(@"v19.25.4", 93),
-                SPOOFER_VERSION(@"v19.25.3", 94),
-                SPOOFER_VERSION(@"v19.24.3", 95),
-                SPOOFER_VERSION(@"v19.24.2", 96),
-                SPOOFER_VERSION(@"v19.23.3", 97),
-                SPOOFER_VERSION(@"v19.22.6", 98),
-                SPOOFER_VERSION(@"v19.22.3", 99),
-                SPOOFER_VERSION(@"v19.21.3", 100),
-                SPOOFER_VERSION(@"v19.21.2", 101),
-                SPOOFER_VERSION(@"v19.20.2 (Deprecated)", 102),
-                SPOOFER_VERSION(@"v19.19.7 (Deprecated)", 103),
-                SPOOFER_VERSION(@"v19.19.5 (Deprecated)", 104),
-                SPOOFER_VERSION(@"v19.18.2 (Deprecated)", 105),
-                SPOOFER_VERSION(@"v19.17.2 (Deprecated)", 106),
-                SPOOFER_VERSION(@"v19.16.3 (Deprecated)", 107),
-                SPOOFER_VERSION(@"v19.15.1 (Deprecated)", 108),
-                SPOOFER_VERSION(@"v19.14.3 (Deprecated)", 109),
-                SPOOFER_VERSION(@"v19.14.2 (Deprecated)", 110),
-                SPOOFER_VERSION(@"v19.13.1 (Deprecated)", 111),
-                SPOOFER_VERSION(@"v19.12.3 (Deprecated)", 112),
-                SPOOFER_VERSION(@"v19.10.7 (Deprecated)", 113),
-                SPOOFER_VERSION(@"v19.10.6 (Deprecated)", 114),
-                SPOOFER_VERSION(@"v19.10.5 (Deprecated)", 115),
-                SPOOFER_VERSION(@"v19.09.4 (Deprecated)", 116),
-                SPOOFER_VERSION(@"v19.09.3 (Deprecated)", 117),
-                SPOOFER_VERSION(@"v19.08.2 (Deprecated)", 118),
-                SPOOFER_VERSION(@"v19.07.5 (Deprecated)", 119),
-                SPOOFER_VERSION(@"v19.07.4 (Deprecated)", 120),
-                SPOOFER_VERSION(@"v19.06.2 (Deprecated)", 121),
-                SPOOFER_VERSION(@"v19.05.5 (Deprecated)", 122),
-                SPOOFER_VERSION(@"v19.05.3 (Deprecated)", 123),
-                SPOOFER_VERSION(@"v19.04.3 (Deprecated)", 124),
-                SPOOFER_VERSION(@"v19.03.2 (Deprecated)", 125),
-                SPOOFER_VERSION(@"v19.02.1 (Deprecated)", 126),
-                SPOOFER_VERSION(@"v19.01.1 (Deprecated)", 127)
+                SPOOFER_VERSION(@"v21.39.4", 0),
+                SPOOFER_VERSION(@"v21.38.2", 1),
+                SPOOFER_VERSION(@"v21.37.5", 2),
+                SPOOFER_VERSION(@"v21.37.4", 3),
+                SPOOFER_VERSION(@"v21.36.6", 4),
+                SPOOFER_VERSION(@"v21.35.3", 5),
+                SPOOFER_VERSION(@"v21.34.3", 6),
+                SPOOFER_VERSION(@"v21.33.6", 7),
+                SPOOFER_VERSION(@"v21.33.5", 8),
+                SPOOFER_VERSION(@"v21.32.4", 9),
+                SPOOFER_VERSION(@"v21.31.3", 10),
+                SPOOFER_VERSION(@"v21.30.5", 11),
+                SPOOFER_VERSION(@"v21.29.3", 12),
+                SPOOFER_VERSION(@"v21.28.3", 13),
+                SPOOFER_VERSION(@"v21.26.4", 14),
+                SPOOFER_VERSION(@"v21.25.5", 15),
+                SPOOFER_VERSION(@"v21.24.3", 16),
+                SPOOFER_VERSION(@"v21.22.4", 17),
+                SPOOFER_VERSION(@"v21.21.3", 18),
+                SPOOFER_VERSION(@"v21.20.4", 19),
+                SPOOFER_VERSION(@"v21.19.2", 20),
+                SPOOFER_VERSION(@"v21.18.4", 21),
+                SPOOFER_VERSION(@"v21.17.3", 22),
+                SPOOFER_VERSION(@"v21.16.2", 23),
+                SPOOFER_VERSION(@"v21.15.5", 24),
+                SPOOFER_VERSION(@"v21.15.4", 25),
+                SPOOFER_VERSION(@"v21.14.4", 26),
+                SPOOFER_VERSION(@"v21.13.6", 27),
+                SPOOFER_VERSION(@"v21.12.4", 28),
+                SPOOFER_VERSION(@"v21.11.4", 29),
+                SPOOFER_VERSION(@"v21.10.2", 30),
+                SPOOFER_VERSION(@"v21.09.3", 31),
+                SPOOFER_VERSION(@"v21.09.2", 32),
+                SPOOFER_VERSION(@"v21.08.3", 33),
+                SPOOFER_VERSION(@"v21.07.4", 34),
+                SPOOFER_VERSION(@"v21.06.2", 35),
+                SPOOFER_VERSION(@"v21.05.3", 36),
+                SPOOFER_VERSION(@"v21.04.2", 37),
+                SPOOFER_VERSION(@"v21.03.2", 38),
+                SPOOFER_VERSION(@"v21.02.3", 39),
+                SPOOFER_VERSION(@"v20.50.10", 40),
+                SPOOFER_VERSION(@"v20.50.9", 41),
+                SPOOFER_VERSION(@"v20.50.6", 42),
+                SPOOFER_VERSION(@"v20.49.5", 43),
+                SPOOFER_VERSION(@"v20.47.3", 44),
+                SPOOFER_VERSION(@"v20.46.3", 45),
+                SPOOFER_VERSION(@"v20.46.2", 46),
+                SPOOFER_VERSION(@"v20.45.3", 47),
+                SPOOFER_VERSION(@"v20.44.2", 48),
+                SPOOFER_VERSION(@"v20.43.3", 49),
+                SPOOFER_VERSION(@"v20.42.3", 50),
+                SPOOFER_VERSION(@"v20.41.5", 51),
+                SPOOFER_VERSION(@"v20.41.4", 52),
+                SPOOFER_VERSION(@"v20.40.4", 53),
+                SPOOFER_VERSION(@"v20.39.6", 54),
+                SPOOFER_VERSION(@"v20.39.5", 55),
+                SPOOFER_VERSION(@"v20.39.4", 56),
+                SPOOFER_VERSION(@"v20.38.4", 57),
+                SPOOFER_VERSION(@"v20.38.3", 58),
+                SPOOFER_VERSION(@"v20.37.5", 59),
+                SPOOFER_VERSION(@"v20.37.3", 60),
+                SPOOFER_VERSION(@"v20.36.3", 61),
+                SPOOFER_VERSION(@"v20.35.2", 62),
+                SPOOFER_VERSION(@"v20.34.2", 63),
+                SPOOFER_VERSION(@"v20.33.2", 64),
+                SPOOFER_VERSION(@"v20.32.5", 65),
+                SPOOFER_VERSION(@"v20.32.4", 66),
+                SPOOFER_VERSION(@"v20.31.6", 67),
+                SPOOFER_VERSION(@"v20.31.5", 68),
+                SPOOFER_VERSION(@"v20.30.5", 69),
+                SPOOFER_VERSION(@"v20.29.3", 70),
+                SPOOFER_VERSION(@"v20.28.2", 71),
+                SPOOFER_VERSION(@"v20.26.7", 72),
+                SPOOFER_VERSION(@"v20.25.4", 73),
+                SPOOFER_VERSION(@"v20.24.5", 74),
+                SPOOFER_VERSION(@"v20.24.4", 75),
+                SPOOFER_VERSION(@"v20.23.3 (Deprecated)", 76),
+                SPOOFER_VERSION(@"v20.22.1 (Deprecated)", 77),
+                SPOOFER_VERSION(@"v20.21.6 (Deprecated)", 78),
+                SPOOFER_VERSION(@"v20.20.7 (Deprecated)", 79),
+                SPOOFER_VERSION(@"v20.20.5 (Deprecated)", 80),
+                SPOOFER_VERSION(@"v20.19.3 (Deprecated)", 81),
+                SPOOFER_VERSION(@"v20.19.2 (Deprecated)", 82),
+                SPOOFER_VERSION(@"v20.18.5 (Deprecated)", 83),
+                SPOOFER_VERSION(@"v20.18.4 (Deprecated)", 84),
+                SPOOFER_VERSION(@"v20.16.7 (Deprecated)", 85),
+                SPOOFER_VERSION(@"v20.15.1 (Deprecated)", 86),
+                SPOOFER_VERSION(@"v20.14.2 (Deprecated)", 87),
+                SPOOFER_VERSION(@"v20.13.5 (Deprecated)", 88),
+                SPOOFER_VERSION(@"v20.12.4 (Deprecated)", 89),
+                SPOOFER_VERSION(@"v20.11.6 (Deprecated)", 90),
+                SPOOFER_VERSION(@"v20.10.4 (Deprecated)", 91),
+                SPOOFER_VERSION(@"v20.10.3 (Deprecated)", 92),
+                SPOOFER_VERSION(@"v20.09.3 (Deprecated)", 93),
+                SPOOFER_VERSION(@"v20.08.3 (Deprecated)", 94),
+                SPOOFER_VERSION(@"v20.07.6 (Deprecated)", 95),
+                SPOOFER_VERSION(@"v20.06.03 (Deprecated)", 96),
+                SPOOFER_VERSION(@"v20.05.4 (Deprecated)", 97),
+                SPOOFER_VERSION(@"v20.03.1 (Deprecated)", 98),
+                SPOOFER_VERSION(@"v20.03.02 (Deprecated)", 99),
+                SPOOFER_VERSION(@"v20.02.3 (Deprecated)", 100)
             ];
             YTSettingsPickerViewController *picker = [[%c(YTSettingsPickerViewController) alloc] initWithNavTitle:LOC(@"VERSION_SPOOFER_SELECTOR") pickerSectionTitle:nil rows:rows selectedItemIndex:appVersionSpoofer() parentResponder:[self parentResponder]];
             [settingsViewController pushViewController:picker];
@@ -961,18 +855,17 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
     # pragma mark - Miscellaneous
     SECTION_HEADER(LOC(@"MISCELLANEOUS"));
 
-    SWITCH2(LOC(@"YouTube Sign-In Patch"), LOC(@"When turned on, you can sign in to the YouTube App when Sideloaded.\nHowever, most material ui icons might disappear, and notifications could stop working.\nThis fix will automatically turn off after two app restarts."), kGoogleSignInPatch);
+    SWITCH2(LOC(@"ENABLE_DYNAMIC_ISLAND_FIX"), LOC(@"ENABLE_DYNAMIC_ISLAND_FIX_DESC"), kEnableDynamicIslandFix);
     SWITCH2(LOC(@"ADBLOCK_WORKAROUND_LITE"), LOC(@"ADBLOCK_WORKAROUND_LITE_DESC"), kAdBlockWorkaroundLite);
     SWITCH2(LOC(@"ADBLOCK_WORKAROUND"), LOC(@"ADBLOCK_WORKAROUND_DESC"), kAdBlockWorkaround);
+    SWITCH2(LOC(@"FIX_PLAYBACK_ISSUES"), LOC(@"FIX_PLAYBACK_ISSUES_DESC"), kFixPlaybackIssues);
     SWITCH3(
         LOC(@"FAKE_PREMIUM"),
         LOC(@"FAKE_PREMIUM_DESC"),
-        kYouTabFakePremium,
+        kYTPremiumLogo,
         ({
-            // Get the current version (including spoofed versions)
             Class YTVersionUtilsClass = %c(YTVersionUtils);
             NSString *appVersion = [YTVersionUtilsClass performSelector:@selector(appVersion)];
-            // Alert if the version is partially incompatible and the toggle is being turned on
             NSComparisonResult result = [appVersion compare:@"18.35.4" options:NSNumericSearch];
             if (enable && result == NSOrderedAscending) {
                 UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Warning" message:[NSString stringWithFormat:@"The \"You\" Tab doesn't exist in v%@, fake buttons will not be created.\nBut the \"Fake Premium Logo\" will still work.", appVersion] preferredStyle:UIAlertControllerStyleAlert];
@@ -980,10 +873,8 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
                 [alert addAction:okAction];
                 [settingsViewController presentViewController:alert animated:YES completion:nil];
             }
-            // Enable the "Disable Animated YouTube Logo" setting
             [[NSUserDefaults standardUserDefaults] setBool:enable forKey:kDisableAnimatedYouTubeLogo];
-            // Refresh data and show the relaunch popup
-            [[NSUserDefaults standardUserDefaults] setBool:enable forKey:kYouTabFakePremium];
+            [[NSUserDefaults standardUserDefaults] setBool:enable forKey:kYTPremiumLogo];
             [settingsViewController reloadData];
             SHOW_RELAUNCH_YT_SNACKBAR;
             return YES;
@@ -995,11 +886,10 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
     SWITCH2(LOC(@"ENABLE_YT_STARTUP_ANIMATION"), LOC(@"ENABLE_YT_STARTUP_ANIMATION_DESC"), kYTStartupAnimation);
     SWITCH(LOC(@"DISABLE_HINTS"), LOC(@"DISABLE_HINTS_DESC"), kDisableHints);
     SWITCH(LOC(@"STICK_NAVIGATION_BAR"), LOC(@"STICK_NAVIGATION_BAR_DESC"), kStickNavigationBar);
-    SWITCH2(LOC(@"HIDE_ISPONSORBLOCK"), nil, kHideiSponsorBlockButton);
     SWITCH(LOC(@"HIDE_CHIP_BAR"), LOC(@"HIDE_CHIP_BAR_DESC"), kHideChipBar);
-    SWITCH2(LOC(@"Enable Notifications Tab"), LOC(@"Makes the Notifications Tab appear back onto the Pivot Bar, experimental: Testing customization options."), kShowNotificationsTab);
+    SWITCH2(LOC(@"SHOW_NOTIFICATIONS_TAB"), LOC(@"SHOW_NOTIFICATIONS_TAB_DESC"), kShowNotificationsTab);
     YTSettingsSectionItem *notificationIconStyle = [%c(YTSettingsSectionItem)
-        itemWithTitle:LOC(@"Notifications Tab nostalgic customization")
+        itemWithTitle:LOC(@"NOTIFICATIONS_TAB_CUSTOMIZATION")
         accessibilityIdentifier:nil
         detailTextBlock:^NSString *() {
             switch (getNotificationIconStyle()) {
@@ -1044,7 +934,7 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
                     return YES;
                 }]
             ];
-            YTSettingsPickerViewController *picker = [[%c(YTSettingsPickerViewController) alloc] initWithNavTitle:LOC(@"Notifications Tab nostalgic customization") pickerSectionTitle:nil rows:rows selectedItemIndex:getNotificationIconStyle() parentResponder:[self parentResponder]];
+            YTSettingsPickerViewController *picker = [[%c(YTSettingsPickerViewController) alloc] initWithNavTitle:LOC(@"NOTIFICATIONS_TAB_CUSTOMIZATION") pickerSectionTitle:nil rows:rows selectedItemIndex:getNotificationIconStyle() parentResponder:[self parentResponder]];
             [settingsViewController pushViewController:picker];
             return YES;
         }
@@ -1055,27 +945,73 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
     SWITCH2(LOC(@"HIDE_HEADER_LINKS_UNDER_PROFILE"), LOC(@"HIDE_HEADER_LINKS_UNDER_PROFILE_DESC"), kHideChannelHeaderLinks);
     SWITCH2(LOC(@"IPHONE_LAYOUT"), LOC(@"IPHONE_LAYOUT_DESC"), kiPhoneLayout);
     SWITCH2(LOC(@"NEW_MINIPLAYER_STYLE"), LOC(@"NEW_MINIPLAYER_STYLE_DESC"), kBigYTMiniPlayer);
-    SWITCH2(LOC(@"YT_RE_EXPLORE"), LOC(@"YT_RE_EXPLORE_DESC"), kReExplore);
     SWITCH2(LOC(@"AUTO_HIDE_HOME_INDICATOR"), LOC(@"AUTO_HIDE_HOME_INDICATOR_DESC"), kAutoHideHomeBar);
     SWITCH2(LOC(@"HIDE_INDICATORS"), LOC(@"HIDE_INDICATORS_DESC"), kHideSubscriptionsNotificationBadge);
-    SWITCH2(LOC(@"FIX_CASTING"), LOC(@"FIX_CASTING_DESC"), kFixCasting);
     SWITCH2(LOC(@"NEW_SETTINGS_UI"), LOC(@"NEW_SETTINGS_UI_DESC"), kNewSettingsUI);
+    YTSettingsSectionItem *youModGitHub = [%c(YTSettingsSectionItem)
+        itemWithTitle:LOC(@"YOU_MOD_GITHUB")
+        titleDescription:LOC(@"YOU_MOD_GITHUB_DESC")
+        accessibilityIdentifier:nil
+        detailTextBlock:nil
+        selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
+            return [%c(YTUIUtils) openURL:[NSURL URLWithString:@"https://github.com/Tonwalter888/YouMod"]];
+        }
+    ];
+    [sectionItems addObject:youModGitHub];
+    YTSettingsSectionItem *migrateToYouMod = [%c(YTSettingsSectionItem)
+        itemWithTitle:LOC(@"MIGRATE_TO_YOU_MOD")
+        titleDescription:LOC(@"MIGRATE_TO_YOU_MOD_DESC")
+        accessibilityIdentifier:nil
+        detailTextBlock:nil
+        selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
+            [[YouModMigrationManager sharedManager] migrateToYouModWithReset:NO];
+            return YES;
+        }
+    ];
+    [sectionItems addObject:migrateToYouMod];
+    YTSettingsSectionItem *migrateAndReset = [%c(YTSettingsSectionItem)
+        itemWithTitle:LOC(@"MIGRATE_TO_YOU_MOD_RESET")
+        titleDescription:LOC(@"MIGRATE_TO_YOU_MOD_RESET_DESC")
+        accessibilityIdentifier:nil
+        detailTextBlock:nil
+        selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
+            [[YouModMigrationManager sharedManager] migrateToYouModWithReset:YES];
+            return YES;
+        }
+    ];
+    [sectionItems addObject:migrateAndReset];
+    NSInteger notifPos = [[NSUserDefaults standardUserDefaults] integerForKey:@"FENotificationsTabIndex"];
+    NSString *notifPosLabel = (notifPos < 0 || notifPos > 4)
+        ? @"End"
+        : @[@"1st", @"2nd", @"3rd", @"4th", @"5th"][notifPos];
+    YTSettingsSectionItem *notifPosition = [%c(YTSettingsSectionItem)
+        itemWithTitle:@"Notifications Tab Position"
+        titleDescription:[NSString stringWithFormat:@"Currently: %@ — tap to cycle (reopen settings to refresh). Reorderable via uYouEnhanced, no conflict with uYou's Reorder Tabs.", notifPosLabel]
+        accessibilityIdentifier:nil
+        detailTextBlock:nil
+        selectBlock:^BOOL (YTSettingsCell *cell, NSUInteger arg1) {
+            NSInteger pos = [[NSUserDefaults standardUserDefaults] integerForKey:@"FENotificationsTabIndex"];
+            pos = (pos + 1) % 6;
+            [[NSUserDefaults standardUserDefaults] setInteger:(pos == 5 ? -1 : pos) forKey:@"FENotificationsTabIndex"];
+            return YES;
+        }
+    ];
+    [sectionItems addObject:notifPosition];
     SWITCH(LOC(@"ENABLE_FLEX"), LOC(@"ENABLE_FLEX_DESC"), kFlex);
 
     if ([settingsViewController respondsToSelector:@selector(setSectionItems:forCategory:title:icon:titleDescription:headerHidden:)])
-        [settingsViewController setSectionItems:sectionItems forCategory:uYouPlusSection title:@"uYouEnhanced" icon:nil titleDescription:LOC(@"TITLE DESCRIPTION") headerHidden:YES];
+        [settingsViewController setSectionItems:sectionItems forCategory:uYouPlusSection title:LOC(@"APP_NAME") icon:nil titleDescription:LOC(@"UYOUENHANCED_SECTION_DESC") headerHidden:YES];
     else
-        [settingsViewController setSectionItems:sectionItems forCategory:uYouPlusSection title:@"uYouEnhanced" titleDescription:LOC(@"TITLE DESCRIPTION") headerHidden:YES];
+        [settingsViewController setSectionItems:sectionItems forCategory:uYouPlusSection title:LOC(@"APP_NAME") titleDescription:LOC(@"UYOUENHANCED_SECTION_DESC") headerHidden:YES];
 }
 
-// File Manager (Import Settings .txt)
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     if (urls.count > 0) {
         NSURL *url = urls.firstObject;
         NSError *error = nil;
         NSString *settingsString = [NSString stringWithContentsOfURL:url encoding:NSUTF8StringEncoding error:&error];
         if (error) {
-            NSLog(@"Error reading file: %@", error.localizedDescription);
+            UYTDebugErr(@"uYouPlusSettings error reading file: %@", error.localizedDescription);
             UIAlertController *errorAlert = [UIAlertController alertControllerWithTitle:@"Error" message:@"Failed to read the settings file." preferredStyle:UIAlertControllerStyleAlert];
             [errorAlert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
             return;
@@ -1088,16 +1024,15 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
                 NSString *value = components[1];
                 [[NSUserDefaults standardUserDefaults] setObject:value forKey:key];
             }
-        }                 
+        }
         [[%c(GOOHUDManagerInternal) sharedInstance] showMessageMainThread:[%c(YTHUDMessage) messageWithText:@"Settings imported"]];
     }
 }
 
 - (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
-    NSLog(@"Document picker was cancelled");
+    UYTDebugInfo(@"uYouPlusSettings document picker was cancelled");
 }
 
-//
 - (void)updateSectionForCategory:(NSUInteger)category withEntry:(id)entry {
     if (category == uYouPlusSection) {
         [self updateTweakSectionWithEntry:entry];
@@ -1106,3 +1041,4 @@ NSString *cacheDescription = [NSString stringWithFormat:@"%@", GetCacheSize()];
     %orig;
 }
 %end
+

@@ -1,11 +1,9 @@
 #import "uYouPlus.h"
 
-// Color Configuration
 static UIColor *lcmHexColor = nil;
 static UIColor *const kLowContrastColor = [UIColor colorWithRed:0.56 green:0.56 blue:0.56 alpha:1.0];
 static UIColor *const kDefaultTextColor = [UIColor whiteColor];
 
-// Utility Functions
 static inline int contrastMode() {
     return [[NSUserDefaults standardUserDefaults] integerForKey:@"lcm"];
 }
@@ -18,17 +16,14 @@ static inline BOOL customContrastMode() {
     return IS_ENABLED(@"lowContrastMode_enabled") && contrastMode() == 1;
 }
 
-// Helper to get active contrast color
 static inline UIColor *activeContrastColor() {
     return customContrastMode() && lcmHexColor ? lcmHexColor : kLowContrastColor;
 }
 
-// Helper to check if dark mode is enabled
 static inline BOOL isDarkMode() {
     return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
 }
 
-// Low Contrast Mode v1.8.0 (Compatible with YouTube v19.21.2-v20.44.2)
 %group gContrastModeShared
 
 %hook UIColor
@@ -108,6 +103,24 @@ static inline BOOL isDarkMode() {
 - (UIColor *)overlayFilledButtonActive {
     return isDarkMode() ? [activeContrastColor() colorWithAlphaComponent:0.2] : %orig;
 }
+- (UIColor *)primaryBackground {
+    return isDarkMode() ? activeContrastColor() : %orig;
+}
+- (UIColor *)secondaryBackground {
+    return isDarkMode() ? activeContrastColor() : %orig;
+}
+- (UIColor *)surface {
+    return isDarkMode() ? activeContrastColor() : %orig;
+}
+- (UIColor *)textOnBrand {
+    return isDarkMode() ? [UIColor blackColor] : %orig;
+}
+- (UIColor *)destructive {
+    return isDarkMode() ? activeContrastColor() : %orig;
+}
+- (UIColor *)iconSecondary {
+    return isDarkMode() ? [activeContrastColor() colorWithAlphaComponent:0.7] : %orig;
+}
 %end
 
 %hook YTColor
@@ -125,10 +138,29 @@ static inline BOOL isDarkMode() {
 - (void)layoutSubviews {
     %orig;
     if (isDarkMode()) {
-        NSArray<NSString *> *targetLabels = @[@"connect account", @"Thanks", @"Save to playlist", @"Report", @"Share", @"Like", @"Dislike"];
         UIColor *contrastColor = activeContrastColor();
-        for (UIView *subview in self.subviews) {
-            if ([targetLabels containsObject:subview.accessibilityLabel]) {
+        NSString *accId = self.accessibilityIdentifier;
+        NSString *accLabel = self.accessibilityLabel;
+        NSArray<NSString *> *targetIds = @[
+            @"id.video.share.button", @"id.video.remix.button",
+            @"id.ui.add_to.offline.button", @"clip_button.eml",
+            @"id.video.thanks.button", @"slim_video_action_bar_share",
+            @"slim_video_action_bar_download", @"slim_video_action_bar_remix",
+            @"slim_video_action_bar_thanks", @"slim_video_action_bar_clip"
+        ];
+        NSArray<NSString *> *targetLabels = @[
+            @"connect account", @"Thanks", @"Save to playlist",
+            @"Report", @"Share", @"Like", @"Dislike"
+        ];
+        BOOL shouldApply = NO;
+        if (accId && [targetIds containsObject:accId]) shouldApply = YES;
+        if (accLabel && [targetLabels containsObject:accLabel]) shouldApply = YES;
+        if (shouldApply) {
+            self.backgroundColor = contrastColor;
+            if ([self isKindOfClass:[UILabel class]]) {
+                ((UILabel *)self).textColor = [UIColor blackColor];
+            }
+            for (UIView *subview in self.subviews) {
                 subview.backgroundColor = contrastColor;
                 if ([subview isKindOfClass:[UILabel class]]) {
                     ((UILabel *)subview).textColor = [UIColor blackColor];
@@ -165,7 +197,9 @@ static inline BOOL isDarkMode() {
     if (isDarkMode()) {
         UIImage *tintedImage = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
         [self setTintColor:kDefaultTextColor];
-        %orig(tintedImage);
+        %orig(
+            tintedImage
+        );
     } else {
         %orig;
     }
@@ -174,25 +208,33 @@ static inline BOOL isDarkMode() {
 
 %hook UIExtendedSRGColorSpace
 - (void)setTextColor:(UIColor *)textColor {
-    %orig([kDefaultTextColor colorWithAlphaComponent:0.9]);
+    %orig(
+        [kDefaultTextColor colorWithAlphaComponent:0.9]
+    );
 }
 %end
 
 %hook UIExtendedSRGBColorSpace
 - (void)setTextColor:(UIColor *)textColor {
-    %orig([kDefaultTextColor colorWithAlphaComponent:1.0]);
+    %orig(
+        [kDefaultTextColor colorWithAlphaComponent:1.0]
+    );
 }
 %end
 
 %hook UIExtendedGrayColorSpace
 - (void)setTextColor:(UIColor *)textColor {
-    %orig([kDefaultTextColor colorWithAlphaComponent:1.0]);
+    %orig(
+        [kDefaultTextColor colorWithAlphaComponent:1.0]
+    );
 }
 %end
 
 %hook VideoTitleLabel
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(kDefaultTextColor);
+    %orig(
+        kDefaultTextColor
+    );
 }
 %end
 
@@ -207,25 +249,33 @@ static inline BOOL isDarkMode() {
     }
 }
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : textColor
+    );
 }
 %end
 
 %hook UITextField
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : textColor
+    );
 }
 %end
 
 %hook UITextView
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : textColor
+    );
 }
 %end
 
 %hook UISearchBar
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : textColor
+    );
 }
 %end
 
@@ -234,7 +284,10 @@ static inline BOOL isDarkMode() {
     if (isDarkMode()) {
         NSMutableDictionary *modifiedAttributes = [NSMutableDictionary dictionaryWithDictionary:attributes];
         modifiedAttributes[NSForegroundColorAttributeName] = kDefaultTextColor;
-        %orig(modifiedAttributes, state);
+        %orig(
+            modifiedAttributes,
+            state
+        );
     } else {
         %orig;
     }
@@ -243,7 +296,10 @@ static inline BOOL isDarkMode() {
 
 %hook UIButton
 - (void)setTitleColor:(UIColor *)color forState:(UIControlState)state {
-    %orig(isDarkMode() ? kDefaultTextColor : color, state);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : color,
+        state
+    );
 }
 %end
 
@@ -252,7 +308,10 @@ static inline BOOL isDarkMode() {
     if (isDarkMode()) {
         NSMutableDictionary *modifiedAttributes = [NSMutableDictionary dictionaryWithDictionary:attributes];
         modifiedAttributes[NSForegroundColorAttributeName] = kDefaultTextColor;
-        %orig(modifiedAttributes, state);
+        %orig(
+            modifiedAttributes,
+            state
+        );
     } else {
         %orig;
     }
@@ -264,7 +323,10 @@ static inline BOOL isDarkMode() {
     if (isDarkMode()) {
         NSMutableDictionary *modifiedAttributes = [NSMutableDictionary dictionaryWithDictionary:attrs];
         modifiedAttributes[NSForegroundColorAttributeName] = kDefaultTextColor;
-        return %orig(str, modifiedAttributes);
+        return %orig(
+            str,
+            modifiedAttributes
+        );
     }
     return %orig;
 }
@@ -272,7 +334,9 @@ static inline BOOL isDarkMode() {
 
 %hook CATextLayer
 - (void)setTextColor:(CGColorRef)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor.CGColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor.CGColor : textColor
+    );
 }
 %end
 
@@ -290,19 +354,25 @@ static inline BOOL isDarkMode() {
 
 %hook ASTextFieldNode
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : textColor
+    );
 }
 %end
 
 %hook ASTextView
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : textColor
+    );
 }
 %end
 
 %hook ASButtonNode
 - (void)setTextColor:(UIColor *)textColor {
-    %orig(isDarkMode() ? kDefaultTextColor : textColor);
+    %orig(
+        isDarkMode() ? kDefaultTextColor : textColor
+    );
 }
 %end
 
@@ -314,7 +384,6 @@ static inline BOOL isDarkMode() {
 
 %end
 
-// Constructor
 %ctor {
     %init;
     if (lowContrastMode() || customContrastMode()) {
@@ -332,3 +401,4 @@ static inline BOOL isDarkMode() {
         }
     }
 }
+
