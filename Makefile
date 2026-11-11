@@ -53,6 +53,7 @@ $(TWEAK_NAME)_INJECT_DYLIBS = \
 	$(THEOS_OBJ_DIR)/YouTubeDislikesReturn.dylib \
 	$(THEOS_OBJ_DIR)/DontEatMyContent.dylib \
 	$(THEOS_OBJ_DIR)/YTHoldForSpeed.dylib \
+	$(THEOS_OBJ_DIR)/YTVideoOverlay.dylib \
 	$(THEOS_OBJ_DIR)/YTweaks.dylib \
 	$(THEOS_OBJ_DIR)/YouTubeLegacy.dylib
 
@@ -82,7 +83,7 @@ UYOU_BUNDLE = $(UYOU_PATH)/Library/Application\ Support/uYouBundle.bundle
 include $(THEOS)/makefiles/common.mk
 
 ifneq ($(JAILBROKEN),1)
-SUBPROJECTS += Tweaks/Alderis Tweaks/DontEatMyContent Tweaks/FLEXing/libflex Tweaks/Return-YouTube-Dislikes Tweaks/YTABConfig Tweaks/YouGroupSettings Tweaks/YTIcons Tweaks/YouLoop Tweaks/YouPiP Tweaks/YouQuality Tweaks/YouSlider Tweaks/YouSpeed Tweaks/YouTimeStamp Tweaks/YTHoldForSpeed Tweaks/YTweaks Tweaks/YouTubeLegacy
+SUBPROJECTS += Tweaks/Alderis Tweaks/DontEatMyContent Tweaks/FLEXing/libflex Tweaks/Return-YouTube-Dislikes Tweaks/YTABConfig Tweaks/YouGroupSettings Tweaks/YTIcons Tweaks/YouLoop Tweaks/YouPiP Tweaks/YouQuality Tweaks/YouSlider Tweaks/YouSpeed Tweaks/YouTimeStamp Tweaks/YTHoldForSpeed Tweaks/YTVideoOverlay Tweaks/YTweaks Tweaks/YouTubeLegacy
 ifeq ($(SPONSORBLOCK_ENABLED),1)
 SUBPROJECTS += Tweaks/iSponsorBlock
 endif
@@ -126,4 +127,3 @@ before-package::
 endif
 after-stage::
 	@bash tools/stage-ffmpeg.sh "$(THEOS_STAGING_DIR)"
-
