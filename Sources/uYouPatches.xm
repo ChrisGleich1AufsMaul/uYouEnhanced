@@ -2,7 +2,12 @@
 #import "uYouPatches.h"
 #import "UYTMediaKit.h"
 #import "DownloadPipeline.h"
+#import <YouTubeHeader/YTVarispeedSwitchControllerOption.h>
 #import <AVFoundation/AVFoundation.h>
+
+@interface YTVarispeedSwitchControllerOption (uYouPatches)
+- (float)rate;
+@end
 
 // ---------------------------------------------------------------------------
 // UYTLog compat
@@ -870,17 +875,17 @@ static float uYouSavedPlaybackRate = 0.0f;
 - (id)init {
     self = %orig;
     NSArray *options = [self valueForKey:@"_options"];
-    NSMutableArray *mutable = [options mutableCopy];
+    NSMutableArray *mutableOptions = [options mutableCopy];
     BOOL has175 = NO;
-    for (id opt in mutable) {
-        if ([opt rate] == 1.75f) { has175 = YES; break; }
+    for (YTVarispeedSwitchControllerOption *option in mutableOptions) {
+        if (option.rate == 1.75f) { has175 = YES; break; }
     }
     if (!has175) {
         Class optClass = %c(YTVarispeedSwitchControllerOption);
         if (optClass) {
             id newOpt = [[optClass alloc] initWithTitle:@"1.75x" rate:1.75f];
-            [mutable addObject:newOpt];
-            [self setValue:mutable forKey:@"_options"];
+            [mutableOptions addObject:newOpt];
+            [self setValue:mutableOptions forKey:@"_options"];
         }
     }
     return self;
