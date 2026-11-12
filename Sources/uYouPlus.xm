@@ -1095,6 +1095,25 @@ static YTMainAppControlsOverlayView *UYTCurrentControlsOverlay(void) {
 - (void)uyt_attachSaveRerouteToSubviews:(UIView *)view depth:(NSInteger)depth;
 @end
 
+static void UYTInsetControlsFromRightEdge(YTMainAppControlsOverlayView *controls) {
+    UIView *superview = controls.superview;
+    if (!superview) return;
+
+    CGRect bounds = superview.bounds;
+    CGRect frame = controls.frame;
+    UIEdgeInsets safeAreaInsets = superview.safeAreaInsets;
+    CGFloat minimumX = CGRectGetMinX(bounds) + safeAreaInsets.left;
+    CGFloat maximumX = CGRectGetMaxX(bounds) - MAX(32.0, safeAreaInsets.right);
+    if (CGRectGetWidth(frame) > maximumX - minimumX) return;
+
+    CGFloat targetMaximumX = maximumX;
+    if (CGRectGetMaxX(frame) > targetMaximumX) {
+        frame.origin.x = targetMaximumX - CGRectGetWidth(frame);
+        frame.origin.x = MAX(minimumX, frame.origin.x);
+        controls.frame = frame;
+    }
+}
+
 %group gSection9
 
 %hook YTMainAppControlsOverlayView
@@ -1190,6 +1209,7 @@ static YTMainAppControlsOverlayView *UYTCurrentControlsOverlay(void) {
 %hook YTMainAppControlsOverlayView
 - (void)layoutSubviews {
     %orig;
+    UYTInsetControlsFromRightEdge(self);
     if (IS_ENABLED(kDisableCollapseButton)) {
         if (self.watchCollapseButton) {
             [self.watchCollapseButton removeFromSuperview];
@@ -2050,4 +2070,3 @@ static NSMutableArray <YTIItemSectionRenderer *> *filteredShortsArray(NSArray <Y
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kNewSettingsUI];
     }
 }
-
